@@ -90,7 +90,7 @@ def console_test(test_str, test_limit):
         print(iterator.leaves())
 
 
-console_test('(NP(NP I)(, ,)(NP her)(CC or)(NP him))', 4)
+#console_test('(NP(NP I)(, ,)(NP her)(CC or)(NP him))', 4)
 
 app = FastAPI()
 
