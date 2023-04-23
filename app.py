@@ -1,6 +1,8 @@
 from nltk.tree import *
 from fastapi import FastAPI
 from itertools import *
+
+
 def flatten_nested_list(lst):
     if not any((type(i) == list) for i in lst):
         return [lst]
@@ -15,8 +17,9 @@ def flatten_nested_list(lst):
 
     return result
 
-#this function relies on the fact, that positions[0] is a list of normal positions of elements we want to combine
-def make_combinations(lst, positions): #[[0, 2], [2, 0]]
+
+# this function relies on the fact, that positions[0] is a list of normal positions of elements we want to combine
+def make_combinations(lst, positions):  # [[0, 2], [2, 0]]
     result = []
     for pos in positions:
         new_lst = lst.copy()
@@ -26,65 +29,71 @@ def make_combinations(lst, positions): #[[0, 2], [2, 0]]
         result.append(new_lst)
     return result
 
-def paraphrases(tree, CHANGE = ['NP'], LIST = ['CC', ','], limit = 20):
-    def paraphrase_children(children):
-        to_add = []
-        for child in children:
-            to_add.append(paraphrases(child))
-        return(flatten_nested_list(to_add))
 
-    #case - leaf
+def paraphrases(tree, change_labels=('NP',), conjunctions=('CC', ','), limit=20):
+    def paraphrase_children(children):
+        child_result = []
+        for child in children:
+            child_result.append(paraphrases(child))
+        return flatten_nested_list(child_result)
+
+    # case - leaf
     if len(tree) == 1:
         return tree
 
-    #case - "NP"
-    if tree.label() in CHANGE:
+    # case - "NP"
+    if tree.label() in change_labels:
         positions_to_change = []
         length = len(tree)
+        position = 0
         for position, child in enumerate(tree):
-            if child.label() in CHANGE:
+            if child.label() in change_labels:
                 positions_to_change.append(position)
-            elif child.label() not in LIST:
+            elif child.label() not in conjunctions:
                 break
 
-        #we encountered any other element
+        # any other element is encountered
         if position < length - 1:
             to_add = paraphrase_children(tree)
-            result = [Tree(tree.label(), combination) for combination in to_add]
-
-        #we encountered only "NP", ",", and "CC"
-        else:
-            combinations = make_combinations(tree, list(permutations(positions_to_change)))
             result = []
-            cur_amount = 0
-            for tree_comb in combinations:
-                to_add = paraphrase_children(tree_comb)
-                comb_result = [Tree(tree.label(), combination) for combination in to_add]
-                result.append(comb_result)
+            for comb in to_add:
+                if limit != -1 and len(result) >= limit:
+                    return result
+                result.append(Tree(tree.label(), comb))
 
+        # only elements from change_labels and conjunctions are encountered
+        else:
+            lst_combinations = make_combinations(tree, list(permutations(positions_to_change)))
+            result = []
+            for tree_comb in lst_combinations:
+                if limit != -1 and len(result) >= limit:
+                    return result
+                to_add = paraphrase_children(tree_comb)
+                for comb in to_add:
+                    result.append(Tree(tree.label(), comb))
 
     else:
         to_add = paraphrase_children(tree)
         result = []
-        cur_amount = 0
         for combination in to_add:
-            if cur_amount >= limit:
+            if limit != -1 and len(result) >= limit:
                 return result
             result.append(Tree(tree.label(), combination))
-            cur_amount = len(result)
 
     return result
 
-# a = paraphrases(t, limit=1)
-# t.pretty_print()
-# print(t)
-# for x in a:
-#     print(x.leaves())
 
-# AA = Tree.fromstring('(S (NP (NP (DT The) (JJ charming) (NNP Gothic) (NNP Quarter)) (, ,) ))')
-# print(AA)
+def console_test(test_str, test_limit):
+    tree = Tree.fromstring(test_str)
+    lst_paraphrases = paraphrases(tree, limit=test_limit)
+    for iterator in lst_paraphrases:
+        print(iterator.leaves())
+
+
+console_test('(NP(NP I)(, ,)(NP her)(CC or)(NP him))', 4)
 
 app = FastAPI()
+
 
 @app.get("/paraphrase")
 def read_tree(tree: str, limit: int = 20):
